@@ -1,99 +1,66 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Universal Browser Cast</title>
+    <title>Quick Cast</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.3.1/peerjs.min.js"></script>
     <style>
         body { background: #000; color: #00ffcc; text-align: center; font-family: sans-serif; }
-        .btn { padding: 20px; width: 80%; margin: 10px; font-size: 1.2rem; border-radius: 10px; border: none; }
-        #tv-id { font-size: 3rem; color: yellow; font-weight: bold; margin: 10px; }
-        video { width: 100%; max-height: 70vh; background: #111; margin-top: 10px; }
-        .hidden { display: none; }
-        input { padding: 15px; width: 80%; font-size: 1.1rem; }
+        .btn { padding: 15px; width: 80%; margin: 5px; font-size: 1.2rem; border-radius: 10px; }
+        #id-view { font-size: 3rem; color: yellow; }
+        video { width: 100%; background: #111; }
     </style>
 </head>
 <body>
-
-    <div id="selection">
-        <h1>Select Device</h1>
-        <button class="btn" style="background:#e50914; color:white;" onclick="setupTV()">I AM TV</button>
-        <button class="btn" style="background:#007bff; color:white;" onclick="setupMobile()">I AM MOBILE</button>
+    <div id="start">
+        <button class="btn" style="background:red" onclick="run('tv')">TV</button>
+        <button class="btn" style="background:blue" onclick="run('mobile')">MOBILE</button>
     </div>
 
-    <div id="tv-ui" class="hidden">
-        <h2>TV CODE</h2>
-        <div id="tv-id">Connecting...</div>
-        <p id="tv-status">Generating code for old browser...</p>
-        <video id="player" controls autoplay></video>
-    </div>
-
-    <div id="mobile-ui" class="hidden">
-        <h2>MOBILE REMOTE</h2>
-        <input type="text" id="target-id" placeholder="Enter TV Code">
-        <br>
-        <p>Pick Video from Gallery:</p>
-        <input type="file" id="file-input" accept="video/*">
-        <br>
-        <button class="btn" style="background:#28a745; color:white;" onclick="connectAndCast()">CAST NOW</button>
-        <p id="m-status"></p>
+    <div id="ui" style="display:none">
+        <div id="id-view">Connecting...</div>
+        <video id="v" controls autoplay playsinline></video>
+        <div id="m" style="display:none">
+            <input type="text" id="target" placeholder="Enter TV Code" style="padding:10px; width:70%"><br>
+            <input type="file" id="f" accept="video/*"><br>
+            <button class="btn" style="background:green" onclick="cast()">SEND</button>
+        </div>
     </div>
 
     <script>
-        var peer = null;
-
-        function setupTV() {
-            document.getElementById('selection').className = 'hidden';
-            document.getElementById('tv-ui').className = '';
-
-            // Using older PeerJS config for better compatibility
-            peer = new Peer();
-
-            peer.on('open', function(id) {
-                document.getElementById('tv-id').innerText = id;
-                document.getElementById('tv-status').innerText = "Ready! Waiting for mobile...";
-            });
-
-            peer.on('connection', function(conn) {
-                document.getElementById('tv-status').innerText = "Receiving Video...";
-                conn.on('data', function(data) {
-                    var blob = new Blob([data.file], { type: data.type });
-                    var videoUrl = URL.createObjectURL(blob);
-                    var player = document.getElementById('player');
-                    player.src = videoUrl;
-                    player.play();
-                });
-            });
-
-            peer.on('error', function(err) {
-                document.getElementById('tv-id').innerText = "Error";
-                document.getElementById('tv-status').innerText = "Refresh and try again.";
-            });
-        }
-
-        function setupMobile() {
-            document.getElementById('selection').className = 'hidden';
-            document.getElementById('mobile-ui').className = '';
-            peer = new Peer();
-        }
-
-        function connectAndCast() {
-            var targetId = document.getElementById('target-id').value;
-            var file = document.getElementById('file-input').files[0];
+        var p;
+        function run(role) {
+            document.getElementById('start').style.display='none';
+            document.getElementById('ui').style.display='block';
             
-            if (!targetId || !file) {
-                alert("Please enter Code and select Video");
-                return;
-            }
+            // Generate a random 4-digit number for the ID
+            var shortId = Math.floor(1000 + Math.random() * 9000).toString();
+            p = new Peer(shortId);
 
-            document.getElementById('m-status').innerText = "Connecting to TV...";
-            var conn = peer.connect(targetId);
+            p.on('open', function(id) { document.getElementById('id-view').innerText = id; });
 
-            conn.on('open', function() {
-                document.getElementById('m-status').innerText = "Casting...";
-                conn.send({
-                    file: file,
-                    type: file.type
+            if(role === 'tv') {
+                p.on('connection', function(c) {
+                    c.on('data', function(d) {
+                        var player = document.getElementById('v');
+                        var url = URL.createObjectURL(new Blob([d.file], {type: d.type}));
+                        player.src = url;
+                        // Android 5 Fix: Force a reload to show picture
+                        player.load();
+                        player.play();
+                    });
                 });
+            } else {
+                document.getElementById('m').style.display='block';
+                document.getElementById('id-view').style.display='none';
+            }
+        }
+
+        function cast() {
+            var file = document.getElementById('f').files[0];
+            var conn = p.connect(document.getElementById('target').value, {reliable: false});
+            conn.on('open', function() {
+                conn.send({file: file, type: file.type});
+                alert("Casting...");
             });
         }
     </script>

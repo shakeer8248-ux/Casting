@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Web Cast</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { background: #0f0f0f; color: #ffffff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: #1e1e1e; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .hidden { display: none; }
+        #player { width: 100%; border-radius: 10px; margin-top: 20px; background: #000; }
+        .btn { padding: 15px 25px; font-size: 16px; font-weight: bold; cursor: pointer; border-radius: 8px; border: none; margin: 10px; transition: 0.3s; }
+        .btn-tv { background: #e50914; color: white; }
+        .btn-mobile { background: #007bff; color: white; }
+        .btn-send { background: #28a745; color: white; width: 100%; }
+        input { padding: 12px; width: 90%; margin: 10px 0; border-radius: 5px; border: 1px solid #444; background: #2b2b2b; color: white; }
+        #tv-id { font-size: 2.5em; color: #ffdd00; letter-spacing: 5px; margin: 15px 0; display: block; }
+        .status-msg { font-style: italic; color: #aaa; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="selection-screen">
+            <h1>Web Video Cast</h1>
+            <p>Select your device role:</p>
+            <button class="btn btn-tv" onclick="setupTV()">I AM THE TV</button>
+            <button class="btn btn-mobile" onclick="setupMobile()">I AM THE MOBILE</button>
+        </div>
+
+        <div id="tv-screen" class="hidden">
+            <h2>TV RECEIVER</h2>
+            <p>Enter this ID on your mobile:</p>
+            <strong id="tv-id">Connecting...</strong>
+            <p id="tv-status" class="status-msg">Waiting for connection...</p>
+            <video id="player" controls autoplay></video>
+        </div>
+
+        <div id="mobile-screen" class="hidden">
+            <h2>MOBILE REMOTE</h2>
+            <input type="text" id="target-id" placeholder="Enter TV ID">
+            <p>Select video from your phone:</p>
+            <input type="file" id="video-file" accept="video/*">
+            <button class="btn btn-send" onclick="startStreaming()">CAST NOW</button>
+            <p id="mobile-status" class="status-msg"></p>
+        </div>
+    </div>
+
+    <script>
+        // Initialize PeerJS
+        const peer = new Peer();
+        let connection = null;
+
+        // When PeerJS connects to the signaling server and gets an ID
+        peer.on('open', (id) => {
+            if (document.getElementById('tv-id')) {
+                document.getElementById('tv-id').innerText = id;
+            }
+        });
+
+        // TV Logic
+        function setupTV() {
+            showScreen('tv-screen');
+            peer.on('connection', (conn) => {
+                document.getElementById('tv-status').innerText = "Connected! Receiving video...";
+                conn.on('data', (data) => {
+                    // Convert received data back into a video URL
+                    const blob = new Blob([data.file], { type: data.type });
+                    const videoURL = URL.createObjectURL(blob);
+                    const videoPlayer = document.getElementById('player');
+                    
+                    videoPlayer.src = videoURL;
+                    videoPlayer.play().catch(err => {
+                        document.getElementById('tv-status').innerText = "Tap TV screen once to allow playback!";
+                    });
+                });
+            });
+        }
+
+        // Mobile Logic
+        function setupMobile() {
+            showScreen('mobile-screen');
+        }
+
+        function startStreaming() {
+            const tvID = document.getElementById('target-id').value;
+            const fileInput = document.getElementById('video-file');
+            const file = fileInput.files[0];
+
+            if (!tvID || !file) {
+                alert("Please enter the TV ID and select a video!");
+                return;
+            }
+
+            document.getElementById('mobile-status').innerText = "Connecting to TV...";
+            const conn = peer.connect(tvID);
+
+            conn.on('open', () => {
+                document.getElementById('mobile-status').innerText = "Streaming... Keep this tab open!";
+                // Send the actual file object
+                conn.send({
+                    file: file,
+                    type: file.type
+                });
+            });
+
+            conn.on('error', (err) => {
+                alert("Connection error. Check the ID.");
+                document.getElementById('mobile-status').innerText = "";
+            });
+        }
+
+        function showScreen(screenId) {
+            document.getElementById('selection-screen').classList.add('hidden');
+            document.getElementById(screenId).classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

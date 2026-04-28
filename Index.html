@@ -1,98 +1,99 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Short-Code Cast</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <title>Universal Browser Cast</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.3.1/peerjs.min.js"></script>
     <style>
-        body { background: #121212; color: white; font-family: sans-serif; text-align: center; padding: 20px; }
-        .box { background: #1e1e1e; padding: 20px; border-radius: 15px; display: inline-block; min-width: 300px; }
-        #tv-id { font-size: 3em; color: #00ffcc; display: block; margin: 10px 0; }
+        body { background: #000; color: #00ffcc; text-align: center; font-family: sans-serif; }
+        .btn { padding: 20px; width: 80%; margin: 10px; font-size: 1.2rem; border-radius: 10px; border: none; }
+        #tv-id { font-size: 3rem; color: yellow; font-weight: bold; margin: 10px; }
+        video { width: 100%; max-height: 70vh; background: #111; margin-top: 10px; }
         .hidden { display: none; }
-        video { width: 100%; max-width: 600px; border-radius: 10px; margin-top: 15px; }
-        input { padding: 12px; margin: 10px; border-radius: 5px; border: none; width: 80%; }
-        button { padding: 12px 24px; border-radius: 5px; border: none; background: #007bff; color: white; font-weight: bold; cursor: pointer; }
+        input { padding: 15px; width: 80%; font-size: 1.1rem; }
     </style>
 </head>
 <body>
 
     <div id="selection">
-        <h1>Web Cast</h1>
-        <button onclick="setupTV()">I AM TV</button>
-        <button onclick="setupMobile()">I AM MOBILE</button>
+        <h1>Select Device</h1>
+        <button class="btn" style="background:#e50914; color:white;" onclick="setupTV()">I AM TV</button>
+        <button class="btn" style="background:#007bff; color:white;" onclick="setupMobile()">I AM MOBILE</button>
     </div>
 
     <div id="tv-ui" class="hidden">
-        <h2>TV Code</h2>
-        <strong id="tv-id">Creating...</strong>
-        <p>Waiting for Mobile...</p>
+        <h2>TV CODE</h2>
+        <div id="tv-id">Connecting...</div>
+        <p id="tv-status">Generating code for old browser...</p>
         <video id="player" controls autoplay></video>
     </div>
 
     <div id="mobile-ui" class="hidden">
-        <h2>Mobile Controller</h2>
-        <input type="number" id="target-id" placeholder="Enter 4-Digit TV Code">
+        <h2>MOBILE REMOTE</h2>
+        <input type="text" id="target-id" placeholder="Enter TV Code">
         <br>
-        <input type="file" id="video-file" accept="video/*">
+        <p>Pick Video from Gallery:</p>
+        <input type="file" id="file-input" accept="video/*">
         <br>
-        <button onclick="startCast()" id="cast-btn">CAST NOW</button>
+        <button class="btn" style="background:#28a745; color:white;" onclick="connectAndCast()">CAST NOW</button>
         <p id="m-status"></p>
     </div>
 
     <script>
-        let peer;
+        var peer = null;
 
         function setupTV() {
-            document.getElementById('selection').classList.add('hidden');
-            document.getElementById('tv-ui').classList.remove('hidden');
+            document.getElementById('selection').className = 'hidden';
+            document.getElementById('tv-ui').className = '';
 
-            // Generate a random 4-digit number for the ID
-            const shortId = Math.floor(1000 + Math.random() * 9000).toString();
-            
-            // Connect to PeerJS using that specific short ID
-            peer = new Peer(shortId);
+            // Using older PeerJS config for better compatibility
+            peer = new Peer();
 
-            peer.on('open', (id) => {
+            peer.on('open', function(id) {
                 document.getElementById('tv-id').innerText = id;
+                document.getElementById('tv-status').innerText = "Ready! Waiting for mobile...";
             });
 
-            peer.on('connection', (conn) => {
-                conn.on('data', (data) => {
-                    const blob = new Blob([data.file], { type: data.type });
-                    document.getElementById('player').src = URL.createObjectURL(blob);
+            peer.on('connection', function(conn) {
+                document.getElementById('tv-status').innerText = "Receiving Video...";
+                conn.on('data', function(data) {
+                    var blob = new Blob([data.file], { type: data.type });
+                    var videoUrl = URL.createObjectURL(blob);
+                    var player = document.getElementById('player');
+                    player.src = videoUrl;
+                    player.play();
                 });
             });
 
-            peer.on('error', (err) => {
-                // If the ID is taken, just refresh
-                if(err.type === 'unavailable-id') location.reload();
+            peer.on('error', function(err) {
+                document.getElementById('tv-id').innerText = "Error";
+                document.getElementById('tv-status').innerText = "Refresh and try again.";
             });
         }
 
         function setupMobile() {
-            document.getElementById('selection').classList.add('hidden');
-            document.getElementById('mobile-ui').classList.remove('hidden');
-            peer = new Peer(); // Mobile can have a random ID
+            document.getElementById('selection').className = 'hidden';
+            document.getElementById('mobile-ui').className = '';
+            peer = new Peer();
         }
 
-        function startCast() {
-            const code = document.getElementById('target-id').value;
-            const file = document.getElementById('video-file').files[0];
-            const btn = document.getElementById('cast-btn');
+        function connectAndCast() {
+            var targetId = document.getElementById('target-id').value;
+            var file = document.getElementById('file-input').files[0];
+            
+            if (!targetId || !file) {
+                alert("Please enter Code and select Video");
+                return;
+            }
 
-            if(!code || !file) return alert("Enter Code & Select Video");
+            document.getElementById('m-status').innerText = "Connecting to TV...";
+            var conn = peer.connect(targetId);
 
-            btn.innerText = "Connecting...";
-            const conn = peer.connect(code, { reliable: true });
-
-            conn.on('open', () => {
-                btn.innerText = "Sending Data...";
-                conn.send({ file: file, type: file.type });
-                btn.innerText = "Casting!";
-            });
-
-            conn.on('error', (err) => {
-                alert("Fail: " + err);
-                btn.innerText = "CAST NOW";
+            conn.on('open', function() {
+                document.getElementById('m-status').innerText = "Casting...";
+                conn.send({
+                    file: file,
+                    type: file.type
+                });
             });
         }
     </script>
